@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>虚拟股票模拟系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+<header class="navbar" style="display: flex; align-items: center; width: 100%;">
+    <a href="index.html" class="logo">Virtual Finance</a>
+
+    <div class="market-indices" style="display: flex; gap: 20px; margin-left: 40px; font-size: 14px;">
+        <div><span style="color: #9aa0a6; margin-right: 8px;">Dow Futures</span><span class="val">47,052.00</span> <span style="color: #f28b82; margin-left: 5px;">-0.83% ↓</span></div>
+        <div><span style="color: #9aa0a6; margin-right: 8px;">S&P Futures</span><span class="val">6,734.50</span> <span style="color: #f28b82; margin-left: 5px;">-0.66% ↓</span></div>
+        <div><span style="color: #9aa0a6; margin-right: 8px;">Nasdaq Futures</span><span class="val">24,820.00</span> <span style="color: #f28b82; margin-left: 5px;">-0.65% ↓</span></div>
+    </div>
+
+    <div class="nav-links" style="margin-left: auto; display: flex; align-items: center;">
+        Market Status: <span style="color: #81c995; margin-left: 5px; margin-right: 20px;">Open</span>
+
+        <a href="#" class="nav-avatar" id="navAvatar" title="个人中心" onclick="handleAvatarClick(event)">?</a>
+    </div>
+</header>
+
+<div class="container">
+    <aside class="left-panel">
+        <div class="section-title">Technology & Semi</div>
+
+        <div class="stock-item" data-symbol="AAPL" data-name="Apple Inc.">
+            <div>
+                <div class="stock-name">AAPL</div>
+                <div class="stock-sub">Apple · Cupertino</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Tech</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="MSFT" data-name="Microsoft Corp.">
+            <div>
+                <div class="stock-name">MSFT</div>
+                <div class="stock-sub">Microsoft · Redmond</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Tech</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="NVDA" data-name="NVIDIA Corp.">
+            <div>
+                <div class="stock-name">NVDA</div>
+                <div class="stock-sub">NVIDIA · Santa Clara</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #f28b82;">Hot</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="TSLA" data-name="Tesla Inc.">
+            <div>
+                <div class="stock-name">TSLA</div>
+                <div class="stock-sub">Tesla · Fremont</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #f28b82;">Hot</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="AVGO" data-name="Broadcom Inc.">
+            <div>
+                <div class="stock-name">AVGO</div>
+                <div class="stock-sub">Broadcom · San Jose</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Semi</div>
+            </div>
+        </div>
+
+        <div class="section-title" style="margin-top: 25px;">Internet & Media</div>
+
+        <div class="stock-item" data-symbol="AMZN" data-name="Amazon.com Inc.">
+            <div>
+                <div class="stock-name">AMZN</div>
+                <div class="stock-sub">Amazon · Seattle</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Web</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="META" data-name="Meta Platforms">
+            <div>
+                <div class="stock-name">META</div>
+                <div class="stock-sub">Meta · Menlo Park</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Web</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="NFLX" data-name="Netflix Inc.">
+            <div>
+                <div class="stock-name">NFLX</div>
+                <div class="stock-sub">Netflix · Los Gatos</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Media</div>
+            </div>
+        </div>
+
+        <div class="section-title" style="margin-top: 25px;">Financials</div>
+
+        <div class="stock-item" data-symbol="JPM" data-name="JPMorgan Chase">
+            <div>
+                <div class="stock-name">JPM</div>
+                <div class="stock-sub">JPMorgan · New York</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Bank</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="V" data-name="Visa Inc.">
+            <div>
+                <div class="stock-name">V</div>
+                <div class="stock-sub">Visa · San Francisco</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Pay</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="BRK.B" data-name="Berkshire Hathaway">
+            <div>
+                <div class="stock-name">BRK.B</div>
+                <div class="stock-sub">Berkshire · Omaha</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Hold</div>
+            </div>
+        </div>
+
+        <div class="section-title" style="margin-top: 25px;">Healthcare</div>
+
+        <div class="stock-item" data-symbol="LLY" data-name="Eli Lilly and Co.">
+            <div>
+                <div class="stock-name">LLY</div>
+                <div class="stock-sub">Eli Lilly · Indianapolis</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #81c995;">GLP-1</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="UNH" data-name="UnitedHealth Group">
+            <div>
+                <div class="stock-name">UNH</div>
+                <div class="stock-sub">UnitedHealth · Minnetonka</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Care</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="JNJ" data-name="Johnson & Johnson">
+            <div>
+                <div class="stock-name">JNJ</div>
+                <div class="stock-sub">J&J · New Brunswick</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Pharma</div>
+            </div>
+        </div>
+
+        <div class="section-title" style="margin-top: 25px;">Consumer Goods</div>
+
+        <div class="stock-item" data-symbol="WMT" data-name="Walmart Inc.">
+            <div>
+                <div class="stock-name">WMT</div>
+                <div class="stock-sub">Walmart · Bentonville</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Retail</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="COST" data-name="Costco Wholesale">
+            <div>
+                <div class="stock-name">COST</div>
+                <div class="stock-sub">Costco · Issaquah</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Retail</div>
+            </div>
+        </div>
+
+        <div class="stock-item" data-symbol="KO" data-name="Coca-Cola Co.">
+            <div>
+                <div class="stock-name">KO</div>
+                <div class="stock-sub">Coca-Cola · Atlanta</div>
+            </div>
+            <div class="stock-price-col">
+                <div class="stock-price" style="color: #9aa0a6;">Drink</div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main-panel">
+        <div class="stock-header">
+            <div class="stock-sub" style="margin-bottom: 5px;">Home | NASDAQX</div>
+            <div class="stock-title" id = "stock_name">Tesla Inc</div>
+            <div class="stock-price-main">
+                <span id="currentPriceDisplay">$5,188.30</span>
+                <span id="priceChangeDisplay" class="change green">+0.18% (+9.20) Today</span>
+            </div>
+            <div class="stock-meta">Mar 12, 12:50:12 PM UTC · USD</div>
+        </div>
+
+        <div id="mainChart" class="chart-container"></div>
+        <div class="news-section-main" style="margin-top: 40px; border-top: 1px solid #3c4043; padding-top: 20px;">
+            <h3 style="color: #fff; margin-bottom: 15px; font-size: 16px;">实时情报 (Live News)</h3>
+            <div id="newsContainer" class="news-list">
+                <div class="loading-text">📡 等待接入市场情报网络...</div>
+            </div>
+        </div>
+    </main>
+
+    <aside class="right-panel">
+        <div class="trading-section">
+            <div class="chat-header">Order Ticket (交易指令)</div>
+
+            <div class="trade-tabs">
+                <button class="trade-tab buy active" onclick="switchTradeType('buy')">买入 (BUY)</button>
+                <button class="trade-tab sell" onclick="switchTradeType('sell')">卖出 (SELL)</button>
+            </div>
+
+            <div class="trade-form">
+                <div class="trade-input-group">
+                    <label>Order Type</label>
+                    <select class="trade-select">
+                        <option>Market (市价)</option>
+                        <option>Limit (限价)</option>
+                    </select>
+                </div>
+                <div class="trade-input-group">
+                    <label>Shares (股数)</label>
+                    <input type="number" id="tradeShares" value="10" min="1">
+                </div>
+                <div class="trade-input-group">
+                    <label>Estimated Total</label>
+                    <div class="trade-total" id="tradeTotal">-- USD</div>
+                </div>
+            </div>
+
+            <button class="execute-btn buy-btn" id="executeBtn" onclick="executeTrade()">提交买单</button>
+        </div>
+
+        <div class="chat-section">
+            <div class="chat-header">AI Investment Assistant</div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="message ai-message">你好！我是你的投资助手，有什么我可以帮你的吗？</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="userInput" placeholder="输入您的问题..." />
+                <button onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script src="index_script.js"></script>
+
+<div class="modal-overlay" id="loginModal">
+    <div class="login-box">
+        <h2>系统登录</h2>
+        <div class="error-msg" id="loginError"></div>
+        <input type="text" id="usernameInput" class="login-input" placeholder="用户名 (如: Pro Trader 01)">
+        <input type="password" id="passwordInput" class="login-input" placeholder="密码 (如: 123456)">
+        <button class="login-btn" onclick="executeLogin()">登 录</button>
+        <button class="login-btn" onclick="executeRegister()">注册新账号</button>
+        <button class="close-btn" onclick="closeLogginModal()">暂不登录</button>
+    </div>
+</div>
+<div class="modal-overlay" id="RegisterModal">
+    <div class="login-box">
+        <h2>系统注册</h2>
+        <div class="error-msg" id="RegisterError"></div>
+
+        <input type="text" id="regUsername" class="login-input" placeholder="用户名 (如: Pro Trader 01)">
+        <input type="password" id="regPassword" class="login-input" placeholder="密码 (如: 123456)">
+
+        <button type="button" class="login-btn" onclick="submitRegister()">确定注册</button>
+
+        <button type="button" class="close-btn" onclick="document.getElementById('RegisterModal').classList.remove('active')" style="margin-top: 10px; background: transparent; border: 1px solid #5f6368;">取消</button>
+    </div>
+</div>
+</body>
+</html>

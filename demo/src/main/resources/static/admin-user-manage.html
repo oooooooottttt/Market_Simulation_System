@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - Virtual Finance</title>
+    <link rel="stylesheet" href="admin-user-manage.css">
+</head>
+<body>
+<header class="navbar">
+    <a href=" " class="logo">Virtual Finance</a >
+    <div class="nav-meta">
+        <span id="adminWelcome">管理员控制台</span>
+        <button class="ghost-btn" onclick="goBackMarket()">返回行情页</button>
+        <button class="ghost-btn danger" onclick="logoutAdmin()">退出登录</button>
+    </div>
+</header>
+
+<main class="page-shell">
+    <section class="hero-card">
+        <div>
+            <p class="eyebrow">Admin User Center</p >
+            <h1>用户管理</h1>
+            <p class="hero-desc">查看所有用户的注册信息、账号状态，并对违规账号执行冻结或解冻操作。</p >
+        </div>
+        <div class="hero-stats">
+            <div class="stat-card">
+                <span>用户总数</span>
+                <strong id="totalUsers">0</strong>
+            </div>
+            <div class="stat-card">
+                <span>正常账号</span>
+                <strong id="normalUsers">0</strong>
+            </div>
+            <div class="stat-card warning">
+                <span>冻结账号</span>
+                <strong id="frozenUsers">0</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="table-card">
+        <div class="table-toolbar">
+            <div>
+                <h2>用户列表</h2>
+                <p>列表加载后可直接进行冻结或解冻。</p >
+            </div>
+            <button class="primary-btn" onclick="loadUserList()">刷新列表</button>
+        </div>
+
+        <div class="feedback-bar" id="feedbackBar"></div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>用户名</th>
+                    <th>注册时间</th>
+                    <th>账号类型</th>
+                    <th>账号状态</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody id="userTableBody">
+                <tr>
+                    <td colspan="6" class="empty-row">正在加载用户列表...</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<div class="modal-mask" id="statusModal">
+    <div class="modal-card">
+        <h3 id="modalTitle">账号操作</h3>
+        <p id="modalDesc">请输入操作原因。</p >
+        <textarea id="reasonInput" placeholder="请输入冻结或解冻原因"></textarea>
+        <div class="modal-actions">
+            <button class="ghost-btn" onclick="closeStatusModal()">取消</button>
+            <button class="primary-btn" onclick="submitStatusChange()">确认提交</button>
+        </div>
+    </div>
+</div>
+
+<script src="admin-user-manage.js"></script>
+</body>
+</html>

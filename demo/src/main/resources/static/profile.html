@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心 - 虚拟股票模拟系统</title>
+    <link rel="stylesheet" href="profile.css">
+</head>
+<body>
+
+<header class="navbar">
+    <a href="index.html" class="logo">Virtual Finance</a>
+    <div class="nav-links">
+        Market Status: Open <a href="index.html">&larr; 返回行情大厅</a>
+    </div>
+</header>
+
+<div class="container">
+    <aside class="left-panel">
+        <div class="menu-group">
+            <div class="menu-title">数据看板</div>
+            <div class="menu-item active" data-target="panel-overview">资产总览</div>
+            <div class="menu-item" data-target="panel-history">历史交易记录</div>
+        </div>
+
+        <div class="menu-group">
+            <div class="menu-title">账户管理</div>
+            <div class="menu-item" data-target="panel-settings">系统与偏好设置</div>
+            <div class="menu-item" onclick="handleSwitchAccount()">切换账号</div>
+            <div class="menu-item danger" onclick="handleLogout()">退出登录</div>
+        </div>
+    </aside>
+
+    <main class="main-panel">
+
+        <div id="panel-overview" class="content-section active">
+            <h2 class="section-header">资产总览</h2>
+            <p style="color: #9aa0a6; margin-bottom: 20px;">欢迎回来。这里是您的资产运作情况。</p>
+
+            <div style="display: flex; gap: 20px; margin-bottom: 30px;">
+                <div style="background: #202124; padding: 20px; border-radius: 8px; border: 1px solid #3c4043; flex: 1;">
+                    <div style="color: #9aa0a6; font-size: 13px; margin-bottom: 5px;">本月收益</div>
+                    <div style="font-size: 28px; color: #81c995;">+$4,250.00</div>
+                </div>
+                <div style="background: #202124; padding: 20px; border-radius: 8px; border: 1px solid #3c4043; flex: 1;">
+                    <div style="color: #9aa0a6; font-size: 13px; margin-bottom: 5px;">胜率 (30天)</div>
+                    <div style="font-size: 28px; color: #fff;">68.5%</div>
+                </div>
+                <div style="background: #202124; padding: 20px; border-radius: 8px; border: 1px solid #3c4043; flex: 1;">
+                    <div style="color: #9aa0a6; font-size: 13px; margin-bottom: 5px;">最大回撤</div>
+                    <div style="font-size: 28px; color: #f28b82;">-4.2%</div>
+                </div>
+            </div>
+
+            <h3 class="sub-header">每日盈亏热力图 (3月)</h3>
+            <div class="calendar-header">
+                <div>日 (Sun)</div><div>一 (Mon)</div><div>二 (Tue)</div><div>三 (Wed)</div>
+                <div>四 (Thu)</div><div>五 (Fri)</div><div>六 (Sat)</div>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+
+        <div id="panel-history" class="content-section">
+            <h2 class="section-header">历史交易记录</h2>
+            <p style="color: #9aa0a6;">您的历史成交单将显示在这里。</p>
+            <div style="margin-top: 20px; border: 1px solid #3c4043; border-radius: 8px; overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+                    <thead>
+                    <tr style="background-color: #202124; color: #9aa0a6;">
+                        <th style="padding: 12px 15px; border-bottom: 1px solid #3c4043;">时间</th>
+                        <th style="padding: 12px 15px; border-bottom: 1px solid #3c4043;">标的</th>
+                        <th style="padding: 12px 15px; border-bottom: 1px solid #3c4043;">方向</th>
+                        <th style="padding: 12px 15px; border-bottom: 1px solid #3c4043;">成交价</th>
+                        <th style="padding: 12px 15px; border-bottom: 1px solid #3c4043;">成交额</th>
+                    </tr>
+                    </thead>
+                    <tbody id="orderTableBody">
+                    <tr>
+                        <td colspan="5" style="padding: 30px; text-align: center; color: #5f6368;">加载中...</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="panel-settings" class="content-section">
+            <h2 class="section-header">系统与偏好设置</h2>
+            <div class="settings-group">
+                <label>显示昵称</label>
+                <input type="text" value="Pro Trader 01">
+            </div>
+            <div class="settings-group">
+                <label>默认主题</label>
+                <select>
+                    <option>深色模式 (Dark)</option>
+                    <option>浅色模式 (Light)</option>
+                    <option>跟随系统</option>
+                </select>
+            </div>
+            <div class="settings-group">
+                <label>涨跌颜色习惯</label>
+                <select>
+                    <option>绿涨红跌 (国际惯例)</option>
+                    <option>红涨绿跌 (中国A股惯例)</option>
+                </select>
+            </div>
+            <button class="btn-save" onclick="alert('设置已保存！')">保存修改</button>
+        </div>
+
+    </main>
+
+    <aside class="right-panel">
+        <div class="avatar" id="userAvatar">?</div>
+
+        <div class="user-name" id="userNameDisplay">数据加载中...</div>
+
+        <div class="user-id" id="userIdDisplay">UID: 读取中</div>
+
+        <div class="account-card">
+            <div class="card-label">总资产 (Total Equity)</div>
+            <div class="card-value" id="totalEquityDisplay">$0.00</div>
+            <div class="card-sub">
+                <span>持仓市值</span>
+                <span class="val" id="portfolioValueDisplay">$0.00</span>
+            </div>
+            <div class="card-sub" style="margin-top: 8px;">
+                <span>今日盈亏</span>
+                <span class="val green-text">+$0.00</span>
+            </div>
+        </div>
+
+        <div class="account-card" style="background-color: transparent;">
+            <div class="card-sub" style="border: none; padding: 0; margin-bottom: 12px;">
+                <span style="color:#9aa0a6">可用资金 (Cash)</span>
+                <span class="val" id="userBalanceDisplay">$0.00</span>
+            </div>
+            <div class="card-sub" style="border: none; padding: 0;">
+                <span style="color:#9aa0a6">冻结保证金 (Margin)</span>
+                <span class="val">$0.00</span>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script src="profile_script.js"></script>
+</body>
+</html>
