@@ -2,6 +2,7 @@ server:
   port: 8080
 
 serviceurl: http://localhost:5000/api/ai/chat
+serviceurlstream: http://localhost:5000/api/ai/chat/stream
 
 spring:
   datasource:

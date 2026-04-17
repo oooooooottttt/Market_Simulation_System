@@ -272,6 +272,184 @@
 </div>
 
 <script src="index_script.js"></script>
+<script>
+    async function executeTrade() {
+        if (!localStorage.getItem('userId')) {
+            alert('Please log in first.');
+            window.location.href = 'index.html';
+            return;
+        }
+
+        const quantity = Number(document.getElementById('tradeShares').value);
+        const direction = (currentTradeAction || '').toUpperCase();
+
+        if (!currentSymbol) {
+            alert('Please select a stock first.');
+            return;
+        }
+
+        if (direction !== 'BUY' && direction !== 'SELL') {
+            alert('Please choose a valid trade direction.');
+            return;
+        }
+
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+            alert('Please enter a valid quantity greater than 0.');
+            return;
+        }
+
+        if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+            alert('Current price is unavailable. Please wait for market data to load.');
+            return;
+        }
+
+        const orderData = {
+            userId: localStorage.getItem('userId'),
+            ticker: currentSymbol,
+            direction: direction,
+            price: currentPrice,
+            quantity: quantity,
+            fee: 5.00,
+            totalAmount: (currentPrice * quantity + 5.00).toFixed(2),
+            tradeTime: new Date().toISOString()
+        };
+
+        try {
+            const response = await fetch('/api/trade/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
+            });
+
+            const result = await response.json();
+            if (result.code === 200) {
+                alert('Trade submitted successfully.');
+                return;
+            }
+
+            alert(result.msg || 'Trade request failed.');
+        } catch (error) {
+            console.error('trade request failed:', error);
+            alert('Trade request failed. Please try again later.');
+        }
+    }
+
+    function createAiStreamMessage() {
+        const chatMessages = document.getElementById('chatMessages');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'message ai-message';
+        wrapper.innerHTML = `
+            <div style="font-size:12px;color:#9aa0a6;margin-bottom:6px;">Final Answer</div>
+            <div class="ai-final-body" style="white-space:pre-wrap;color:#e8eaed;margin-bottom:10px;">正在分析...</div>
+            <details class="ai-thinking-details" style="margin-top:4px;">
+                <summary class="ai-thinking-summary" style="cursor:pointer;color:#9aa0a6;font-size:12px;">查看思考过程</summary>
+                <div class="ai-thinking-body" style="white-space:pre-wrap;color:#fbbc04;margin-top:8px;"></div>
+            </details>
+        `;
+        chatMessages.appendChild(wrapper);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return {
+            thinkingDetailsEl: wrapper.querySelector('.ai-thinking-details'),
+            thinkingSummaryEl: wrapper.querySelector('.ai-thinking-summary'),
+            thinkingEl: wrapper.querySelector('.ai-thinking-body'),
+            finalEl: wrapper.querySelector('.ai-final-body'),
+            container: wrapper
+        };
+    }
+
+    function appendThinkingLine(target, line) {
+        if (!line) {
+            return;
+        }
+        target.textContent += (target.textContent ? '\n' : '') + line;
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('userInput');
+        const messageText = input.value.trim();
+
+        if (!messageText) {
+            return;
+        }
+
+        appendMessage('user', messageText);
+        input.value = '';
+
+        const aiMessage = createAiStreamMessage();
+        appendThinkingLine(aiMessage.thinkingEl, 'Preparing analysis...');
+        aiMessage.thinkingSummaryEl.textContent = '查看思考过程（分析中）';
+
+        try {
+            const response = await fetch('/api/ai/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    symbol: currentSymbol,
+                    message: messageText
+                })
+            });
+
+            if (!response.ok || !response.body) {
+                throw new Error('AI stream is unavailable');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+                buffer = buffer.replace(/\r/g, '');
+
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+
+                for (const part of parts) {
+                    const dataLine = part.split('\n').find(line => line.startsWith('data:'));
+                    if (!dataLine) {
+                        continue;
+                    }
+
+                    const payload = dataLine.slice(5).trim();
+                    if (!payload) {
+                        continue;
+                    }
+
+                    const event = JSON.parse(payload);
+                    if (event.type === 'thinking') {
+                        appendThinkingLine(aiMessage.thinkingEl, event.content || '');
+                        aiMessage.thinkingSummaryEl.textContent = '查看思考过程（分析中）';
+                    } else if (event.type === 'final') {
+                        aiMessage.finalEl.textContent = event.content || '';
+                        aiMessage.thinkingSummaryEl.textContent = '查看思考过程（已完成）';
+                    } else if (event.type === 'error') {
+                        appendThinkingLine(aiMessage.thinkingEl, 'Error');
+                        aiMessage.finalEl.textContent = event.content || 'AI service is unavailable.';
+                        aiMessage.thinkingDetailsEl.open = true;
+                        aiMessage.thinkingSummaryEl.textContent = '查看思考过程（出现错误）';
+                    } else if (event.type === 'done') {
+                        if (!aiMessage.finalEl.textContent.trim()) {
+                            aiMessage.finalEl.textContent = '本次没有生成可用结论。';
+                        }
+                        aiMessage.thinkingSummaryEl.textContent = '查看思考过程（已完成）';
+                        aiMessage.container.scrollIntoView({ block: 'end', behavior: 'smooth' });
+                    }
+                }
+
+                if (done) {
+                    break;
+                }
+            }
+        } catch (error) {
+            console.error('AI stream failed:', error);
+            appendThinkingLine(aiMessage.thinkingEl, 'Error');
+            aiMessage.finalEl.textContent = 'AI service is temporarily unavailable.';
+            aiMessage.thinkingDetailsEl.open = true;
+            aiMessage.thinkingSummaryEl.textContent = '查看思考过程（出现错误）';
+        }
+    }
+</script>
 
 <div class="modal-overlay" id="loginModal">
     <div class="login-box">

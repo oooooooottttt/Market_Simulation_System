@@ -2,9 +2,12 @@ import json
 import os
 
 import redis
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from news_fetcher import fetch_yahoo_news
 from rag_service import MarketRAGService
@@ -31,13 +34,54 @@ rag_service = MarketRAGService(redis_client=r)
 
 
 class ChatReq(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     symbol: str
     question: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_question_field(cls, data):
+        if not isinstance(data, dict):
+            return data
+
+        normalized = dict(data)
+        if not normalized.get("question") and normalized.get("message"):
+            normalized["question"] = normalized["message"]
+        return normalized
 
 
 class KnowledgeBuildReq(BaseModel):
     input_dir: str | None = None
     recreate: bool = True
+
+
+def _sse_payload(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    raw_body = (await request.body()).decode("utf-8", errors="ignore")
+    print(
+        "[validation-error]",
+        json.dumps(
+            {
+                "path": str(request.url.path),
+                "method": request.method,
+                "errors": exc.errors(),
+                "body": raw_body,
+            },
+            ensure_ascii=False,
+        ),
+    )
+    return JSONResponse(
+        status_code=422,
+        content={
+            "status": "error",
+            "message": "Invalid request payload.",
+            "errors": exc.errors(),
+        },
+    )
 
 
 @app.get("/api/news/{symbol}")
@@ -80,9 +124,38 @@ async def clear_knowledge_base():
 async def chat_with_rag(req: ChatReq):
     try:
         result = rag_service.analyze(symbol=req.symbol, question=req.question)
-        return {"reply": result["reply"], "used_news_count": result["used_news_count"], "used_rule_count": result["used_rule_count"]}
+        return {
+            "reply": result["reply"],
+            "used_news_count": result["used_news_count"],
+            "used_rule_count": result["used_rule_count"],
+        }
     except Exception as exc:
-        return {"reply": f"RAG request failed: {exc}", "used_news_count": 0, "used_rule_count": 0}
+        return {
+            "reply": f"RAG request failed: {exc}",
+            "used_news_count": 0,
+            "used_rule_count": 0,
+        }
+
+
+@app.post("/api/ai/chat/stream")
+async def chat_with_rag_stream(req: ChatReq):
+    def event_stream():
+        try:
+            for event in rag_service.stream_events(symbol=req.symbol, question=req.question):
+                yield _sse_payload(event)
+        except Exception as exc:
+            yield _sse_payload({"type": "error", "content": f"RAG request failed: {exc}"})
+            yield _sse_payload({"type": "done", "content": ""})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # Start command:

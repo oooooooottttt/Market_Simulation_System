@@ -1,5 +1,6 @@
 import feedparser
 from bs4 import BeautifulSoup
+from urllib.parse import quote
 
 
 def _clean_summary(raw_summary: str) -> str:
@@ -9,7 +10,8 @@ def _clean_summary(raw_summary: str) -> str:
 
 def fetch_yahoo_news(symbol: str, limit: int = 5) -> list[dict]:
     symbol = symbol.upper().strip()
-    url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
+    encoded_symbol = quote(symbol, safe=".")
+    url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={encoded_symbol}&region=US&lang=en-US"
     feed = feedparser.parse(url)
 
     if not feed.entries:

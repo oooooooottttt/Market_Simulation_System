@@ -1,6 +1,9 @@
 package com.project___10.demo.service;
 
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
 public interface AIAssistantService {
-    //根据股票代码和用户提问，获取 AI 的进一步分析
     String getAIAnalysis(String symbol, String question);
+
+    void streamAIAnalysis(String symbol, String question, SseEmitter emitter);
 }

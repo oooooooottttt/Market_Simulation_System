@@ -104,6 +104,11 @@ function loadStockData(symbol, companyName) {
             option.series[0].data = data.values;
             myChart.setOption(option, true);
 
+            if (data.values && data.values.length > 0) {
+                let initialLastCandle = data.values[data.values.length - 1];
+                currentPrice = parseFloat(initialLastCandle[1]);
+            }
+
             priceTimer = setInterval(() => {
                 let lastCandle = data.values[data.values.length - 1];
                 let currentOpen = parseFloat(lastCandle[0]);

@@ -2,7 +2,9 @@ package com.project___10.demo.service;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.project___10.demo.dao.KLineDailyRepository;
 import com.project___10.demo.dto.KLineDataDTO;
+import com.project___10.demo.entity.KLineDaily;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -11,9 +13,12 @@ import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -21,66 +26,148 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class MarketDataServiceImpl implements MarketDataService {
 
-    // 注入 Redis 和 HTTP 工具
+    private static final int CACHE_HOURS = 12;
+    private static final int MAX_CHART_POINTS = 100;
+
     private final StringRedisTemplate redisTemplate;
     private final RestTemplate restTemplate;
+    private final KLineDailyRepository kLineDailyRepository;
 
-    //自动读取 application.yml 里绑定的环境变量
-    //@Value("${market.api.key}")
     private final String apiKey = "Alphavantage-API-Key";
-    // 核心入口：带缓存的高并发数据分发
+
+    @Override
     public KLineDataDTO fetchKLineData(String symbol) {
-        String redisKey = "market:kline:" + symbol;
+        String normalizedSymbol = normalizeTicker(symbol);
+        String redisKey = buildRedisKey(normalizedSymbol);
 
-        //1.缓存拦截，去 Redis 里找
-        String cachedData = redisTemplate.opsForValue().get(redisKey);
-        if (cachedData != null) {
-            log.info("⚡ 命中 Redis 缓存，直接返回！无需消耗 API 额度: {}", symbol);
-            return JSON.parseObject(cachedData, KLineDataDTO.class);
+        String cachedJson = redisTemplate.opsForValue().get(redisKey);
+        if (cachedJson != null && !cachedJson.isBlank()) {
+            log.info("Redis cache hit for {}", normalizedSymbol);
+            return JSON.parseObject(cachedJson, KLineDataDTO.class);
         }
 
-        //2. 缓存未命中，调用真实的 Alpha Vantage API
-        log.warn("🐢 Redis 无缓存，准备消耗 1 次额度调用 Alpha Vantage: {}", symbol);
-        KLineDataDTO dto = callAlphaVantageApi(symbol);
+        KLineDataDTO dbSnapshot = getRecent100KLinesByTicker(normalizedSymbol);
+        boolean hasDatabaseData = hasData(dbSnapshot);
 
-        //3.回写缓存，把拉到的数据存进 Redis，设置 12 小时过期！
-        // 因为日K线一天只更新一次，存半天可以最大化节省每天 25 次的免费额度！
-        if (dto != null && !dto.getDates().isEmpty()) {
-            redisTemplate.opsForValue().set(redisKey, JSON.toJSONString(dto), 12, TimeUnit.HOURS);
-            log.info("数据已成功写入 Redis 缓存！");
+        try {
+            syncLatestRowsFromApi(normalizedSymbol);
+        } catch (IllegalStateException ex) {
+            if (!hasDatabaseData) {
+                throw ex;
+            }
+            log.warn("API sync failed for {}, falling back to database snapshot: {}", normalizedSymbol, ex.getMessage());
         }
 
+        KLineDataDTO dbDto = getRecent100KLinesByTicker(normalizedSymbol);
+        if (!hasData(dbDto) && hasDatabaseData) {
+            dbDto = dbSnapshot;
+        }
+
+        if (hasData(dbDto)) {
+            writeToRedis(dbDto, redisKey);
+            return dbDto;
+        }
+
+        throw new IllegalStateException("Market data unavailable for symbol: " + normalizedSymbol);
+    }
+
+    private void syncLatestRowsFromApi(String symbol) {
+        Optional<KLineDaily> latestDbRecord = kLineDailyRepository.findTopByTickerOrderByTradeDateDesc(symbol);
+        LocalDate latestDbDate = latestDbRecord.map(KLineDaily::getTradeDate).orElse(null);
+
+        KLineDataDTO apiDto = callAlphaVantageApi(symbol);
+        if (!hasData(apiDto)) {
+            return;
+        }
+
+        saveNewRowsToDatabase(symbol, apiDto, latestDbDate);
+    }
+
+    private KLineDataDTO getRecent100KLinesByTicker(String symbol) {
+        List<KLineDaily> kLines = kLineDailyRepository.findTop100ByTickerOrderByTradeDateDesc(symbol);
+        Collections.reverse(kLines);
+        return buildDtoFromEntities(kLines);
+    }
+
+    private KLineDataDTO buildDtoFromEntities(List<KLineDaily> kLines) {
+        KLineDataDTO dto = new KLineDataDTO();
+        List<String> dates = new ArrayList<>();
+        List<List<BigDecimal>> values = new ArrayList<>();
+
+        for (KLineDaily kLine : kLines) {
+            dates.add(kLine.getTradeDate().toString());
+            values.add(Arrays.asList(
+                    kLine.getOpenPrice(),
+                    kLine.getClosePrice(),
+                    kLine.getLowPrice(),
+                    kLine.getHighPrice()
+            ));
+        }
+
+        dto.setDates(dates);
+        dto.setValues(values);
         return dto;
+    }
+
+    private void writeToRedis(KLineDataDTO dto, String redisKey) {
+        redisTemplate.opsForValue().set(redisKey, JSON.toJSONString(dto), CACHE_HOURS, TimeUnit.HOURS);
+        log.info("Redis cache refreshed for key {}", redisKey);
+    }
+
+    private void saveNewRowsToDatabase(String symbol, KLineDataDTO dto, LocalDate latestDbDate) {
+        List<KLineDaily> list = new ArrayList<>();
+
+        for (int i = 0; i < dto.getDates().size(); i++) {
+            LocalDate tradeDate = LocalDate.parse(dto.getDates().get(i));
+            if (latestDbDate != null && !tradeDate.isAfter(latestDbDate)) {
+                continue;
+            }
+            if (kLineDailyRepository.existsByTickerAndTradeDate(symbol, tradeDate)) {
+                continue;
+            }
+
+            List<BigDecimal> item = dto.getValues().get(i);
+            KLineDaily entity = new KLineDaily();
+            entity.setTicker(symbol);
+            entity.setTradeDate(tradeDate);
+            entity.setOpenPrice(item.get(0));
+            entity.setClosePrice(item.get(1));
+            entity.setLowPrice(item.get(2));
+            entity.setHighPrice(item.get(3));
+            entity.setVolume(0L);
+            list.add(entity);
+        }
+
+        if (!list.isEmpty()) {
+            kLineDailyRepository.saveAll(list);
+            log.info("Inserted {} new K-line rows for {}", list.size(), symbol);
+        }
     }
 
     @Override
     public KLineDataDTO callAlphaVantageApi(String symbol) {
-        // 构建 Alpha Vantage 的合法请求 URL
         String url = "https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=" + symbol + "&apikey=" + apiKey;
 
         try {
-            log.info("发送合法请求: {}", url.replace(apiKey, "******")); // 日志里把秘钥打码，安全第一！
+            log.info("Requesting Alpha Vantage for {}", symbol);
             String response = restTemplate.getForObject(url, String.class);
             JSONObject root = JSON.parseObject(response);
 
-            //防熔断机制，Alpha Vantage 额度用光时，不会报 429，而是返回一个 Information 字段
             if (root.containsKey("Information") || root.containsKey("Note")) {
-                log.error("Alpha Vantage API 免费额度已耗尽或请求超限！");
-                return generateMockData();
+                log.error("Alpha Vantage rate limit reached for {}", symbol);
+                throw new IllegalStateException("Market data unavailable for symbol: " + symbol);
             }
 
             JSONObject timeSeries = root.getJSONObject("Time Series (Daily)");
             if (timeSeries == null) {
-                log.error("找不到行情数据，可能是股票代码错误: {}", symbol);
-                return generateMockData();
+                log.error("No market data found for {}", symbol);
+                throw new IllegalStateException("Market data unavailable for symbol: " + symbol);
             }
 
-            //Alpha Vantage 返回的是乱序 Map，需要把日期提取出来并按升序排列
             List<String> allDates = new ArrayList<>(timeSeries.keySet());
-            Collections.sort(allDates); // 升序排列：老的在前，新的在后
+            Collections.sort(allDates);
 
-            //只要最近的 100 天数据
-            int startIdx = Math.max(0, allDates.size() - 100);
+            int startIdx = Math.max(0, allDates.size() - MAX_CHART_POINTS);
             List<String> dates = new ArrayList<>();
             List<List<BigDecimal>> values = new ArrayList<>();
 
@@ -88,74 +175,38 @@ public class MarketDataServiceImpl implements MarketDataService {
                 String dateStr = allDates.get(i);
                 JSONObject dayData = timeSeries.getJSONObject(dateStr);
 
-                //解析价格并限制2位小数 (Alpha Vantage 的字段名带数字前缀)
                 BigDecimal open = dayData.getBigDecimal("1. open").setScale(2, RoundingMode.HALF_UP);
                 BigDecimal high = dayData.getBigDecimal("2. high").setScale(2, RoundingMode.HALF_UP);
                 BigDecimal low = dayData.getBigDecimal("3. low").setScale(2, RoundingMode.HALF_UP);
                 BigDecimal close = dayData.getBigDecimal("4. close").setScale(2, RoundingMode.HALF_UP);
 
                 dates.add(dateStr);
-                //ECharts 的格式要求：[开盘, 收盘, 最低, 最高]
                 values.add(Arrays.asList(open, close, low, high));
             }
 
             KLineDataDTO realData = new KLineDataDTO();
             realData.setDates(dates);
             realData.setValues(values);
-
-            log.info("成功解析 {} 条 {} 的真实历史行情！", dates.size(), symbol);
             return realData;
-
         } catch (Exception e) {
-            log.error("API 调用发生异常: {}", e.getMessage());
-            return generateMockData(); // 断网兜底
+            log.error("Failed to fetch market data for {}: {}", symbol, e.getMessage());
+            throw new IllegalStateException("Market data unavailable for symbol: " + symbol);
         }
     }
 
-    /**
-     * 兜底降级用,但是我感觉这有失真实性，特别是在金融项目中
-     */
-    @Override
-    public KLineDataDTO generateMockData() {
-        log.warn("启动备用数据引擎：生成 100 天模拟大盘数据");
-        KLineDataDTO dto = new KLineDataDTO();
-        List<String> dates = new ArrayList<>();
-        List<List<BigDecimal>> values = new ArrayList<>();
+    private boolean hasData(KLineDataDTO dto) {
+        return dto != null
+                && dto.getDates() != null
+                && !dto.getDates().isEmpty()
+                && dto.getValues() != null
+                && !dto.getValues().isEmpty();
+    }
 
-        int daysToSimulate = 100;
-        LocalDate currentDate = LocalDate.now().minusDays(daysToSimulate + 30);
-        BigDecimal lastClose = new BigDecimal("3000.00");
-        Random random = new Random();
+    private String buildRedisKey(String symbol) {
+        return "market:kline:" + symbol;
+    }
 
-        int generatedCount = 0;
-        while (generatedCount < daysToSimulate) {
-            if (currentDate.getDayOfWeek() == DayOfWeek.SATURDAY || currentDate.getDayOfWeek() == DayOfWeek.SUNDAY) {
-                currentDate = currentDate.plusDays(1);
-                continue;
-            }
-
-            double gapPercent = (random.nextDouble() - 0.5) * 0.01;
-            BigDecimal open = lastClose.multiply(BigDecimal.valueOf(1 + gapPercent)).setScale(2, RoundingMode.HALF_UP);
-            double dailyVolPercent = (random.nextDouble() - 0.5) * 0.04;
-            BigDecimal close = open.multiply(BigDecimal.valueOf(1 + dailyVolPercent)).setScale(2, RoundingMode.HALF_UP);
-
-            BigDecimal maxOpenClose = open.max(close);
-            BigDecimal minOpenClose = open.min(close);
-            BigDecimal highShadow = maxOpenClose.multiply(BigDecimal.valueOf(random.nextDouble() * 0.01));
-            BigDecimal high = maxOpenClose.add(highShadow).setScale(2, RoundingMode.HALF_UP);
-            BigDecimal lowShadow = minOpenClose.multiply(BigDecimal.valueOf(random.nextDouble() * 0.01));
-            BigDecimal low = minOpenClose.subtract(lowShadow).setScale(2, RoundingMode.HALF_UP);
-
-            dates.add(currentDate.toString());
-            values.add(Arrays.asList(open, close, low, high));
-
-            lastClose = close;
-            currentDate = currentDate.plusDays(1);
-            generatedCount++;
-        }
-
-        dto.setDates(dates);
-        dto.setValues(values);
-        return dto;
+    private String normalizeTicker(String symbol) {
+        return symbol == null ? "" : symbol.trim().toUpperCase();
     }
 }
